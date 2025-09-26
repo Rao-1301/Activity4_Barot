@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>DidLab Token DApp</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, button { margin: 5px; padding: 5px; }
+    .box { border: 1px solid #ccc; padding: 15px; margin: 15px 0; }
+  </style>
+</head>
+<body>
+  <h1>DidLab Token DApp</h1>
+
+  <div class="box">
+    <button id="connectButton">Connect MetaMask</button>
+    <p id="account">Not connected</p>
+    <p id="network">Network: Not detected</p>
+  </div>
+
+  <div class="box">
+    <h3>Load Token</h3>
+    <input type="text" id="tokenAddress" placeholder="Enter ERC20 contract address" size="60">
+    <button id="loadToken">Load Token</button>
+    <p id="tokenInfo"></p>
+    <p id="balance"></p>
+  </div>
+
+  <div class="box">
+    <h3>Transfer Tokens</h3>
+    <input type="text" id="recipient" placeholder="Recipient address" size="60">
+    <input type="number" id="amount" placeholder="Amount">
+    <button id="sendToken">Send</button>
+    <p id="txStatus"></p>
+  </div>
+
+  <script>
+    let provider, signer, tokenContract;
+    const abi = [
+      "function name() view returns (string)",
+      "function symbol() view returns (string)",
+      "function decimals() view returns (uint8)",
+      "function balanceOf(address owner) view returns (uint256)",
+      "function transfer(address to, uint256 amount) returns (bool)"
+    ];
+
+    document.getElementById("connectButton").onclick = async () => {
+      if (window.ethereum) {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        const account = await signer.getAddress();
+        const network = await provider.getNetwork();
+        document.getElementById("account").innerText = "Connected: " + account;
+        document.getElementById("network").innerText = "Network: " + network.chainId;
+      } else {
+        alert("MetaMask not detected!");
+      }
+    };
+
+    document.getElementById("loadToken").onclick = async () => {
+      try {
+        const tokenAddr = document.getElementById("tokenAddress").value.trim();
+        if (!tokenAddr) {
+          alert("Enter a contract address");
+          return;
+        }
+        tokenContract = new ethers.Contract(tokenAddr, abi, signer);
+        const name = await tokenContract.name();
+        const symbol = await tokenContract.symbol();
+        const decimals = await tokenContract.decimals();
+        document.getElementById("tokenInfo").innerText = `Token: ${name} (${symbol}), Decimals: ${decimals}`;
+
+        const account = await signer.getAddress();
+        const bal = await tokenContract.balanceOf(account);
+        const humanBal = ethers.utils.formatUnits(bal, decimals);
+        document.getElementById("balance").innerText = `Balance: ${humanBal} ${symbol}`;
+      } catch (err) {
+        console.error(err);
+        alert("Error loading token. Make sure it's a valid ERC20 contract.");
+      }
+    };
+
+    document.getElementById("sendToken").onclick = async () => {
+      try {
+        if (!tokenContract) {
+          alert("Load a token first!");
+          return;
+        }
+        const recipient = document.getElementById("recipient").value.trim();
+        const amount = document.getElementById("amount").value;
+        const decimals = await tokenContract.decimals();
+        const parsedAmount = ethers.utils.parseUnits(amount, decimals);
+
+        const tx = await tokenContract.transfer(recipient, parsedAmount);
+        document.getElementById("txStatus").innerText = "Transaction sent: " + tx.hash;
+        await tx.wait();
+        document.getElementById("txStatus").innerText = "Transaction confirmed: " + tx.hash;
+      } catch (err) {
+        console.error(err);
+        alert("Error sending transaction: " + err.message);
+      }
+    };
+  </script>
+</body>
+</html>
